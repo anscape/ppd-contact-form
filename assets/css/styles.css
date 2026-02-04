@@ -181,6 +181,12 @@ button[disabled] {
   display: none;
 }
 
+.help {
+  margin: -8px 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
 .status.success {
   background: #ffffff;
   color: #000000;

@@ -1,4 +1,4 @@
-const GOOGLE_SHEETS_ENDPOINT = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+const GOOGLE_SHEETS_ENDPOINT = "https://script.google.com/macros/s/AKfycbwHk6tLwb3bC_5SC6iGstptG33n2zf_Plgl-n2PdHtbOFaqER0secuFP48R3Kf7t2oNAQ/exec";
 
 const form = document.getElementById("contact-form");
 const submitBtn = document.getElementById("submit-btn");
@@ -6,10 +6,21 @@ const successEl = document.getElementById("status-success");
 const errorEl = document.getElementById("status-error");
 const honeypot = document.getElementById("company");
 const tsField = document.getElementById("ts");
+const errorDefault = errorEl ? errorEl.textContent : "Something went wrong.";
 
 const pageLoadTime = Date.now();
 if (tsField) {
   tsField.value = new Date().toISOString();
+}
+
+if (submitBtn) {
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Please wait…";
+  window.setTimeout(() => {
+    if (!submitBtn.disabled) return;
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Send message";
+  }, 2000);
 }
 
 const RATE_LIMIT_KEY = "ppd_contact_submissions";
@@ -22,6 +33,13 @@ function showStatus(el) {
   if (el) {
     el.style.display = "block";
   }
+}
+
+function showError(message) {
+  if (errorEl) {
+    errorEl.textContent = message || errorDefault;
+  }
+  showStatus(errorEl);
 }
 
 function setButtonState(isSending) {
@@ -72,17 +90,17 @@ async function handleSubmit(event) {
   const message = document.getElementById("message").value.trim();
 
   if (!name || !email || !message) {
-    showStatus(errorEl);
+    showError("Please fill in all fields.");
     return;
   }
 
   if (!isValidEmail(email)) {
-    showStatus(errorEl);
+    showError("Please enter a valid email address.");
     return;
   }
 
   if (message.length < 20 || message.length > 2000) {
-    showStatus(errorEl);
+    showError("Message must be 20–2000 characters.");
     return;
   }
 
@@ -91,18 +109,18 @@ async function handleSubmit(event) {
   }
 
   if (Date.now() - pageLoadTime < 2000) {
-    showStatus(errorEl);
+    showError("Please wait a moment and try again.");
     return;
   }
 
   if (!passesRateLimit()) {
-    showStatus(errorEl);
+    showError("Too many submissions. Try again in 10 minutes.");
     return;
   }
 
   if (!GOOGLE_SHEETS_ENDPOINT || GOOGLE_SHEETS_ENDPOINT.includes("PASTE_YOUR")) {
     console.log("Missing Google Sheets endpoint.");
-    showStatus(errorEl);
+    showError("Endpoint is not configured.");
     return;
   }
 
@@ -120,11 +138,22 @@ async function handleSubmit(event) {
 
     const response = await fetch(GOOGLE_SHEETS_ENDPOINT, {
       method: "POST",
+      mode: "no-cors",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "text/plain;charset=utf-8",
       },
       body: JSON.stringify(payload),
     });
+
+    if (response.type === "opaque") {
+      recordSubmission();
+      form.reset();
+      if (tsField) {
+        tsField.value = new Date().toISOString();
+      }
+      showStatus(successEl);
+      return;
+    }
 
     let result = null;
     try {
@@ -135,7 +164,7 @@ async function handleSubmit(event) {
 
     if (!response.ok || !result || result.ok !== true) {
       console.log("Submission failed:", response.status, result);
-      showStatus(errorEl);
+      showError();
       return;
     }
 
@@ -147,7 +176,7 @@ async function handleSubmit(event) {
     showStatus(successEl);
   } catch (err) {
     console.log("Network error:", err);
-    showStatus(errorEl);
+    showError();
   } finally {
     setButtonState(false);
   }
